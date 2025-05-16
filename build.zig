@@ -60,7 +60,6 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
     lib.addIncludePath(b.path("include/"));
-    lib.addObject(stb);
     b.installArtifact(lib);
 
     // ─────────────────────────────────────────────────────────────

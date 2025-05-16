@@ -10,17 +10,23 @@ on:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest]
+        zig-version: [0.14.0]
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Zig
-        uses: ziglang/setup-zig@v0
+        uses: mlugg/setup-zig@main
         with:
-          version: ">=0.14.0"
+          version: ${{ matrix.zig-version }}
 
-      - name: Build and test
-        run: zig build test
+      - name: Build library
+        run: zig build
+
+      - name: Run tests
+        run: zig build test --summary all
