@@ -10,6 +10,9 @@ pub const Error = error{
     OutOfMemory,
 };
 
+// run a wavelet transform given a specific transform
+// object, either a RowTransform or ColumnTransform
+// object
 fn wavelet(comptime T: type, transform: *T, size: usize) void {
     for (0..size) |idx| {
         var pairIdx: usize = 0;
@@ -20,7 +23,10 @@ fn wavelet(comptime T: type, transform: *T, size: usize) void {
     }
 }
 
-fn form(comptime T: type, t: *T, cur: usize, next: usize, y: usize) void {
+// run a decomposition on a given pair of values
+// both an average and a difference is computed and then
+// written to the temporary buffer
+fn d(comptime T: type, t: *T, cur: usize, next: usize, y: usize) void {
     const invSqrt = 1.0 / std.math.sqrt(2.0);
     const avg = (t.t[cur] + t.t[next]) * invSqrt;
     const diff = (t.t[cur] - t.t[next]) * invSqrt;
@@ -28,6 +34,9 @@ fn form(comptime T: type, t: *T, cur: usize, next: usize, y: usize) void {
     t.temp[t.temp.len / 2 + y / 2] = diff;
 }
 
+// contains logic housed within two methods (write, decomp)
+// for the row transform which does the decomposition and
+// also writes to the row buffer
 const RowTransform = struct {
     size: usize,
     t: []f32,
@@ -41,10 +50,13 @@ const RowTransform = struct {
 
     fn decomp(self: *RowTransform, x: usize, pair: usize) void {
         const cur = x * self.size + pair;
-        form(RowTransform, self, cur, cur + 1, pair);
+        d(RowTransform, self, cur, cur + 1, pair);
     }
 };
 
+// contains logic housed within two methods (write, decomp)
+// for the column transform which does the decomposition and
+// also writes to the row buffer
 const ColumnTransform = struct {
     size: usize,
     t: []f32,
@@ -58,16 +70,20 @@ const ColumnTransform = struct {
 
     fn decomp(self: *ColumnTransform, x: usize, pair: usize) void {
         const cur = x + pair * self.size;
-        form(ColumnTransform, self, cur, cur + self.size, pair);
+        d(ColumnTransform, self, cur, cur + self.size, pair);
     }
 };
 
+// calculates an image size from two c_int variables and
+// converts the result to a usize
 fn imageSizeFromC(width: c_int, height: c_int) usize {
     const imgWidth: usize = @intCast(width);
     const imgHeight: usize = @intCast(height);
     return imgWidth * imgHeight;
 }
 
+// a simple struct to store the image and metadata after
+// loading an image
 const ImageLoad = struct {
     Image: []u8,
     Width: c_int,
@@ -82,6 +98,9 @@ const ImageLoad = struct {
     }
 };
 
+// converts an image with RGB channels into a grayscale image
+// calculated using the luminosity formula
+// L = (R * 299 + G * 587 + B * 114) / 1000
 fn rgb2Gray(imageBuf: []u8, grayBuf: []u8, channels: usize) void {
     var iter: usize = 0;
     while (iter < imageBuf.len) : (iter += channels) {
@@ -93,9 +112,8 @@ fn rgb2Gray(imageBuf: []u8, grayBuf: []u8, channels: usize) void {
     }
 }
 
-// separable DCT II calculation
-fn dct2() void {}
-
+// calculates the median for an array of numbers
+// uses a naive approach rather than a quick select algorithm
 fn calcMedian(nums: []f32, comptime size: usize) f32 {
     var sorted: [size]f32 = undefined;
     @memcpy(sorted[0..size], nums[0..size]);
@@ -109,6 +127,8 @@ fn calcMedian(nums: []f32, comptime size: usize) f32 {
     }
 }
 
+// calculates a hash by applying median thresholding to
+// each pixel in the array
 fn hashFromMedian(buf: []f32, median: f32) u64 {
     var hash: u64 = 0;
     for (0..buf.len) |i| {
@@ -120,9 +140,8 @@ fn hashFromMedian(buf: []f32, median: f32) u64 {
     return hash;
 }
 
+// extracts the top S x S block from the input array
 fn extractLL(in: []f32, out: []f32, llSize: usize, size: usize) void {
-    // allocate a new matrix for calculating the median
-    // only allocate the top left 8 x 8 from the matrix
     var medianIdx: usize = 0;
     for (0..llSize) |x| {
         for (0..llSize) |y| {
@@ -132,6 +151,9 @@ fn extractLL(in: []f32, out: []f32, llSize: usize, size: usize) void {
     }
 }
 
+// given a filename will load an image into an 1D slice
+// and return an ImageLoad object with the slice and
+// accompanying metadata
 fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     const allocator = std.heap.page_allocator;
 
@@ -147,7 +169,13 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     @memcpy(c_filename[0..filename.len], filename);
     c_filename[filename.len] = 0;
 
-    const data = c.stbi_load(c_filename.ptr, &outX, &outY, &outChannels, channels);
+    const data = c.stbi_load(
+        c_filename.ptr,
+        &outX,
+        &outY,
+        &outChannels,
+        channels
+    );
 
     if (data == null) {
         return Error.LoadFailed;
@@ -158,6 +186,7 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     return ImageLoad{ .Image = slice, .Width = outX, .Height = outY };
 }
 
+// implementation of the average hash algorithm
 pub fn averageHash(filename: []const u8) Error!u64 {
     const allocator = std.heap.page_allocator;
 
@@ -168,8 +197,7 @@ pub fn averageHash(filename: []const u8) Error!u64 {
 
     var image = try loadImage(filename, channels);
 
-    // allocate a buffer for the grayscaled image, since
-    // the original image will be quantized after loading
+    // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
     rgb2Gray(image.Image, grayBuf, channels);
 
@@ -216,6 +244,7 @@ pub fn averageHash(filename: []const u8) Error!u64 {
     return hash;
 }
 
+// implementation of the difference hash algorithm
 pub fn differenceHash(filename: []const u8) Error!u64 {
     const allocator = std.heap.page_allocator;
 
@@ -226,8 +255,7 @@ pub fn differenceHash(filename: []const u8) Error!u64 {
 
     var image = try loadImage(filename, channels);
 
-    // allocate a buffer for the grayscaled image, since
-    // the original image will be quantized after loading
+    // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
     rgb2Gray(image.Image, grayBuf, channels);
 
@@ -281,6 +309,7 @@ pub fn differenceHash(filename: []const u8) Error!u64 {
     return hash;
 }
 
+// implementation of the perceptual hash algorithm
 pub fn perceptualHash(filename: []const u8) Error!u64 {
     const allocator = std.heap.page_allocator;
 
@@ -290,8 +319,7 @@ pub fn perceptualHash(filename: []const u8) Error!u64 {
 
     var image = try loadImage(filename, channels);
 
-    // allocate a buffer for the grayscaled image, since
-    // the original image will be quantized after loading
+    // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
     rgb2Gray(image.Image, grayBuf, channels);
 
@@ -320,11 +348,11 @@ pub fn perceptualHash(filename: []const u8) Error!u64 {
     defer image.freeMemory();
     defer allocator.free(grayBuf);
 
-    var rowIn: [resize]f32 = undefined;
+    // define two arrays for intermediate and final states
     var temp: [resize]f32 = undefined;
     var dct: [resize]f32 = undefined;
     for (0..resizeBuf.len) |i| {
-        rowIn[i] = @floatFromInt(resizeBuf[i]);
+        dct[i] = @floatFromInt(resizeBuf[i]);
     }
 
     // precomputing the 1D basis matrix
@@ -346,16 +374,18 @@ pub fn perceptualHash(filename: []const u8) Error!u64 {
         }
     }
 
+    // applying a row-wise DCT pass
     for (0..size) |x| {
         for (0..size) |u| {
             var colSum: f32 = 0;
             for (0..size) |y| {
-                colSum += rowIn[x * size + y] * basis[u * size + y];
+                colSum += dct[x * size + y] * basis[u * size + y];
             }
             temp[x * size + u] = colSum;
         }
     }
 
+    // applying a column-wise DCT pass
     for (0..size) |u| {
         for (0..size) |v| {
             var rowSum: f32 = 0;
@@ -366,17 +396,18 @@ pub fn perceptualHash(filename: []const u8) Error!u64 {
         }
     }
 
-    // allocate a new array for calculating the median
-    // only allocate the top left 8 x 8 from the DCT
+    // define a new array for calculating the median
+    // only extract the top left 8 x 8 from the DCT
     const llSize: usize = 8;
     const newSize: usize = llSize * llSize;
-    var llBuf: [llSize * llSize]f32 = undefined;
+    var llBuf: [newSize]f32 = undefined;
     extractLL(dct[0..], llBuf[0..], llSize, size);
 
     const dctMedian = calcMedian(llBuf[0..], newSize);
     return hashFromMedian(llBuf[0..], dctMedian);
 }
 
+// implementation of the wavelet hash algorithm
 pub fn waveletHash(filename: []const u8) Error!u64 {
     const allocator = std.heap.page_allocator;
 
@@ -386,8 +417,7 @@ pub fn waveletHash(filename: []const u8) Error!u64 {
 
     var image = try loadImage(filename, channels);
 
-    // allocate a buffer for the grayscaled image, since
-    // the original image will be quantized after loading
+    // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
     rgb2Gray(image.Image, grayBuf, channels);
 
@@ -416,7 +446,7 @@ pub fn waveletHash(filename: []const u8) Error!u64 {
     defer image.freeMemory();
     defer allocator.free(grayBuf);
 
-    // allocate a buffer for the transformations
+    // define an array for the transformations
     var tBuf: [resize]f32 = undefined;
     for (0..resizeBuf.len) |i| {
         tBuf[i] = @floatFromInt(resizeBuf[i]);
@@ -426,9 +456,13 @@ pub fn waveletHash(filename: []const u8) Error!u64 {
     var distBuf: [size]f32 = undefined;
     var tempBuf: []f32 = distBuf[0..lvlSize];
 
-    var rowTransform = RowTransform{ .size = 0, .t = tBuf[0..], .temp = tempBuf[0..] };
-    var colTransform = ColumnTransform{ .size = 0, .t = tBuf[0..], .temp = tempBuf[0..] };
-    for (1..2) |_| {
+    var rowTransform = RowTransform{
+        .size = 0, .t = tBuf[0..], .temp = tempBuf[0..]
+    };
+    var colTransform = ColumnTransform{
+        .size = 0, .t = tBuf[0..], .temp = tempBuf[0..]
+    };
+    for (1..4) |_| {
         // row wavelet transform
         wavelet(RowTransform, &rowTransform, lvlSize);
 
@@ -438,11 +472,11 @@ pub fn waveletHash(filename: []const u8) Error!u64 {
         tempBuf = distBuf[0..lvlSize];
     }
 
-    // allocate a new matrix for calculating the median
-    // only allocate the top left 8 x 8 from the wavelet
+    // define a new array for calculating the median
+    // only extract the top left 8 x 8 from the wavelet
     const llSize: usize = 8;
     const newSize: usize = llSize * llSize;
-    var llBuf: [llSize * llSize]f32 = undefined;
+    var llBuf: [newSize]f32 = undefined;
     extractLL(tBuf[0..], llBuf[0..], llSize, size);
 
     const waveMedian = calcMedian(llBuf[0..], newSize);
@@ -455,6 +489,7 @@ test "image hash equals" {
         Hash: u64,
         Hasher: *const fn ([]const u8) Error!u64 
     }{
+        // tests for the average hash algorithm
         .{
             .Path = "./testdata/checkerboard.png",
             .Hash = 2990062961267801748,
@@ -470,6 +505,8 @@ test "image hash equals" {
             .Hash = 6821913422469120,
             .Hasher = averageHash,
         },
+
+        // tests for the difference hash algorithm
         .{
             .Path = "./testdata/checkerboard.png",
             .Hash = 15826956251609881124,
@@ -485,6 +522,8 @@ test "image hash equals" {
             .Hash = 12858323363238572534,
             .Hasher = differenceHash,
         },
+
+        // tests for the wavelet hash algorithm
         .{
             .Path = "./testdata/checkerboard.png",
             .Hash = 18446673704965373696,
@@ -500,6 +539,8 @@ test "image hash equals" {
             .Hash = 15670382578127328000,
             .Hasher = waveletHash,
         },
+
+        // tests for the perceptual hash algorithm
         .{
             .Path = "./testdata/checkerboard.png",
             .Hash = 7770000005721920801,
