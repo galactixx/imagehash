@@ -27,15 +27,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const exe_mod = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    // allow main.zig to `@import("imagehash_lib")`
-    exe_mod.addImport("imagehash_lib", lib_mod);
-
     // ─────────────────────────────────────────────────────────────
     // 3. STB implementation object (C)
     // ─────────────────────────────────────────────────────────────
@@ -60,27 +51,11 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
     lib.addIncludePath(b.path("include/"));
+    lib.addObject(stb);
     b.installArtifact(lib);
 
     // ─────────────────────────────────────────────────────────────
-    // 5. Command-line executable for quick testing
-    // ─────────────────────────────────────────────────────────────
-    const exe = b.addExecutable(.{
-        .name        = "imagehash",
-        .root_module = exe_mod,
-    });
-    exe.addIncludePath(b.path("include/"));
-    exe.addObject(stb);
-    b.installArtifact(exe);
-
-    // run step: `zig build run -- <args>`
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_cmd.addArgs(args);
-    b.step("run", "Run the app").dependOn(&run_cmd.step);
-
-    // ─────────────────────────────────────────────────────────────
-    // 6. Unit tests
+    // 5. Unit tests
     // ─────────────────────────────────────────────────────────────
     const img_tests = b.addTest(.{
         .root_source_file  = b.path("src/imagehash.zig"),
