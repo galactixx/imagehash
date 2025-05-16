@@ -1,0 +1,26 @@
+name: Zig Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Zig
+        uses: ziglang/setup-zig@v0
+        with:
+          version: ">=0.14.0"
+
+      - name: Build and test
+        run: zig build test
