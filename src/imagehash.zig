@@ -10,6 +10,9 @@ pub const Error = error{
     OutOfMemory,
 };
 
+// pull in the JSON parse-error set
+pub const ParseError = std.json.ParseError(std.json.Scanner);
+
 // run a wavelet transform given a specific transform
 // object, either a RowTransform or ColumnTransform
 // object
@@ -86,13 +89,19 @@ fn imageSizeFromC(width: c_int, height: c_int) usize {
     return imgWidth * imgHeight;
 }
 
+pub fn fromJSON(json: []const u8, alloc: std.mem.Allocator) ParseError!ImageHash {
+    const parsed = try std.json.parseFromSlice(ImageHash, alloc, json, .{});
+    defer parsed.deinit();
+    return parsed.value;
+}
+
 // 
 pub const ImageHash = struct {
     hashType: []const u8,
     hash: u64,
     bits: u8 = 64,
 
-    pub fn toJSON(self: ImageHash, alloc: std.mem.Allocator) ![]u8 {    
+    pub fn toJSON(self: ImageHash, alloc: *std.mem.Allocator) ![]u8 {    
         return try std.json.stringifyAlloc(alloc, self, .{});
     }
 
@@ -266,7 +275,7 @@ pub fn averageHash(filename: []const u8) Error!ImageHash {
             hash |= @as(u64, 1) << typedI;
         }
     }
-    return ImageHash{.hashType = "average", .hash = hash};
+    return ImageHash{.hashType = "ahash", .hash = hash};
 }
 
 // implementation of the difference hash algorithm
@@ -331,7 +340,7 @@ pub fn differenceHash(filename: []const u8) Error!ImageHash {
             }
         }
     }
-    return ImageHash{.hashType = "difference", .hash = hash};
+    return ImageHash{.hashType = "dhash", .hash = hash};
 }
 
 // implementation of the perceptual hash algorithm
@@ -430,7 +439,7 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
 
     const dctMedian = calcMedian(llBuf[0..], newSize);
     const intHash = hashFromMedian(llBuf[0..], dctMedian);
-    return ImageHash{.hashType = "perceptual", .hash = intHash};
+    return ImageHash{.hashType = "phash", .hash = intHash};
 }
 
 // implementation of the wavelet hash algorithm
@@ -507,7 +516,27 @@ pub fn waveletHash(filename: []const u8) Error!ImageHash {
 
     const waveMedian = calcMedian(llBuf[0..], newSize);
     const intHash = hashFromMedian(llBuf[0..], waveMedian);
-    return ImageHash{.hashType = "wavelet", .hash = intHash};
+    return ImageHash{.hashType = "whash", .hash = intHash};
+}
+
+test "hamming distance" {
+    const boardHash = try averageHash("./testdata/checkerboard.png");
+    const gradientHash = try averageHash("./testdata/gradient.png");
+
+    const hammingDistance = boardHash.distance(gradientHash);
+    try std.testing.expectEqual(27, hammingDistance);
+}
+
+test "parse image hash from JSON" {
+    const allocator = std.heap.page_allocator;
+    const jsonText = "{\"hashType\": \"aHash\", \"hash\": 2990062961267801748, \"bits\": 64}";
+    const imageHash = try fromJSON(jsonText, allocator);
+    const imageHashExp = ImageHash{
+        .hashType = "aHash",
+        .hash = 2990062961267801748,
+        .bits = 64
+    };
+    try std.testing.expectEqualDeep(imageHashExp, imageHash);
 }
 
 test "image hash equals" {
@@ -521,21 +550,21 @@ test "image hash equals" {
         // tests for the average hash algorithm
         .{
             .path = "./testdata/checkerboard.png",
-            .hashType = "average",
+            .hashType = "ahash",
             .hash = 2990062961267801748,
             .hexHash = "297ed66bd66b7e94",
             .hasher = averageHash,
         },
         .{
             .path = "./testdata/gradient.png",
-            .hashType = "average",
+            .hashType = "ahash",
             .hash = 2197615328739459072,
             .hexHash = "1e7f7f7f7e780000",
             .hasher = averageHash,
         },
         .{
             .path = "./testdata/noise.png",
-            .hashType = "average",
+            .hashType = "ahash",
             .hash = 6821913422469120,
             .hexHash = "183c7e7e3c1800",
             .hasher = averageHash,
@@ -544,21 +573,21 @@ test "image hash equals" {
         // tests for the difference hash algorithm
         .{
             .path = "./testdata/checkerboard.png",
-            .hashType = "difference",
+            .hashType = "dhash",
             .hash = 15826956251609881124,
             .hexHash = "dba4a4db24dada24",
             .hasher = differenceHash,
         },
         .{
             .path = "./testdata/gradient.png",
-            .hashType = "difference",
+            .hashType = "dhash",
             .hash = 18228586548031439040,
             .hexHash = "fcf8f2e2e0e0c0c0",
             .hasher = differenceHash,
         },
         .{
             .path = "./testdata/noise.png",
-            .hashType = "difference",
+            .hashType = "dhash",
             .hash = 12858323363238572534,
             .hexHash = "b271f0f8f8f0f1f6",
             .hasher = differenceHash,
@@ -567,21 +596,21 @@ test "image hash equals" {
         // tests for the wavelet hash algorithm
         .{
             .path = "./testdata/checkerboard.png",
-            .hashType = "wavelet",
+            .hashType = "whash",
             .hash = 18446673704965373696,
             .hexHash = "ffffbfffffffff00",
             .hasher = waveletHash,
         },
         .{
             .path = "./testdata/gradient.png",
-            .hashType = "wavelet",
+            .hashType = "whash",
             .hash = 18374401693019275264,
             .hexHash = "fefefcfcf0c00000",
             .hasher = waveletHash,
         },
         .{
             .path = "./testdata/noise.png",
-            .hashType = "wavelet",
+            .hashType = "whash",
             .hash = 15670382578127328000,
             .hexHash = "d97861edf7bfd300",
             .hasher = waveletHash,
@@ -590,21 +619,21 @@ test "image hash equals" {
         // tests for the perceptual hash algorithm
         .{
             .path = "./testdata/checkerboard.png",
-            .hashType = "perceptual",
+            .hashType = "phash",
             .hash = 7770000005721920801,
             .hexHash = "6bd495d685d69521",
             .hasher = perceptualHash,
         },
         .{
             .path = "./testdata/gradient.png",
-            .hashType = "perceptual",
+            .hashType = "phash",
             .hash = 11769193724227288235,
             .hexHash = "a35493561952fcab",
             .hasher = perceptualHash,
         },
         .{
             .path = "./testdata/noise.png",
-            .hashType = "perceptual",
+            .hashType = "phash",
             .hash = 16427238378350324179,
             .hexHash = "e3f94645163c29d3",
             .hasher = perceptualHash,
