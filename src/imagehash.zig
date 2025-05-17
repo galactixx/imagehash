@@ -74,6 +74,10 @@ const ColumnTransform = struct {
     }
 };
 
+fn int64ToHex(hex: []u8, hash: u64) ![]u8 {
+    return try std.fmt.bufPrint(hex, "{x}", .{hash});
+}
+
 // calculates an image size from two c_int variables and
 // converts the result to a usize
 fn imageSizeFromC(width: c_int, height: c_int) usize {
@@ -82,19 +86,41 @@ fn imageSizeFromC(width: c_int, height: c_int) usize {
     return imgWidth * imgHeight;
 }
 
+// 
+pub const ImageHash = struct {
+    hashType: []const u8,
+    hash: u64,
+    bits: u8 = 64,
+
+    pub fn toJSON(self: ImageHash, alloc: std.mem.Allocator) ![]u8 {    
+        return try std.json.stringifyAlloc(alloc, self, .{});
+    }
+
+    pub fn distance(self: ImageHash, hash: ImageHash) u64 {
+        const diff = self.hash ^ hash.hash;
+        const hammingDistance = @popCount(diff);
+        return hammingDistance;
+    }
+
+    pub fn hexDigest(self: ImageHash, buf: []u8) ![]u8 {
+        return try int64ToHex(buf, self.hash);
+    }
+};
+
+
 // a simple struct to store the image and metadata after
 // loading an image
 const ImageLoad = struct {
-    Image: []u8,
-    Width: c_int,
-    Height: c_int,
+    image: []u8,
+    width: c_int,
+    height: c_int,
 
     fn imageSize(self: ImageLoad) usize {
-        return imageSizeFromC(self.Width, self.Height);
+        return imageSizeFromC(self.width, self.height);
     }
 
     fn freeMemory(self: *ImageLoad) void {
-        c.stbi_image_free(self.Image.ptr);
+        c.stbi_image_free(self.image.ptr);
     }
 };
 
@@ -183,11 +209,11 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     const imgSize = imageSizeFromC(outX, outY) * channels;
     const raw: [*]u8 = @ptrCast(data);
     const slice: []u8 = raw[0..imgSize];
-    return ImageLoad{ .Image = slice, .Width = outX, .Height = outY };
+    return ImageLoad{ .image = slice, .width = outX, .height = outY };
 }
 
 // implementation of the average hash algorithm
-pub fn averageHash(filename: []const u8) Error!u64 {
+pub fn averageHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
     const resizeWidth = 8;
@@ -199,14 +225,14 @@ pub fn averageHash(filename: []const u8) Error!u64 {
 
     // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
-    rgb2Gray(image.Image, grayBuf, channels);
+    rgb2Gray(image.image, grayBuf, channels);
 
     // define an array and resize the grayscaled image
     var resizeBuf: [resize]u8 = undefined;
     const ok = c.stbir_resize_uint8_generic(
         grayBuf.ptr,
-        image.Width,
-        image.Height, 0,
+        image.width,
+        image.height, 0,
         resizeBuf[0..].ptr,
         @intCast(resizeWidth),
         @intCast(resizeHeight),
@@ -241,11 +267,11 @@ pub fn averageHash(filename: []const u8) Error!u64 {
             hash |= @as(u64, 1) << typedI;
         }
     }
-    return hash;
+    return ImageHash{.hashType = "average", .hash = hash};
 }
 
 // implementation of the difference hash algorithm
-pub fn differenceHash(filename: []const u8) Error!u64 {
+pub fn differenceHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
     const resizeWidth = 9;
@@ -257,13 +283,13 @@ pub fn differenceHash(filename: []const u8) Error!u64 {
 
     // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
-    rgb2Gray(image.Image, grayBuf, channels);
+    rgb2Gray(image.image, grayBuf, channels);
 
     // define an array and resize the grayscaled image
     var resizeBuf: [resize]u8 = undefined;
     const ok = c.stbir_resize_uint8_generic(
-        grayBuf.ptr, image.Width,
-        image.Height,
+        grayBuf.ptr, image.width,
+        image.height,
         0,
         resizeBuf[0..].ptr,
         @intCast(resizeWidth),
@@ -306,11 +332,11 @@ pub fn differenceHash(filename: []const u8) Error!u64 {
             }
         }
     }
-    return hash;
+    return ImageHash{.hashType = "difference", .hash = hash};
 }
 
 // implementation of the perceptual hash algorithm
-pub fn perceptualHash(filename: []const u8) Error!u64 {
+pub fn perceptualHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
     const size = 32;
@@ -321,14 +347,14 @@ pub fn perceptualHash(filename: []const u8) Error!u64 {
 
     // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
-    rgb2Gray(image.Image, grayBuf, channels);
+    rgb2Gray(image.image, grayBuf, channels);
 
     // define an array and resize the grayscaled image
     var resizeBuf: [resize]u8 = undefined;
     const ok = c.stbir_resize_uint8_generic(
         grayBuf.ptr,
-        image.Width, 
-        image.Height,
+        image.width, 
+        image.height,
         0,
         resizeBuf[0..].ptr,
         @intCast(size),
@@ -404,11 +430,12 @@ pub fn perceptualHash(filename: []const u8) Error!u64 {
     extractLL(dct[0..], llBuf[0..], llSize, size);
 
     const dctMedian = calcMedian(llBuf[0..], newSize);
-    return hashFromMedian(llBuf[0..], dctMedian);
+    const intHash = hashFromMedian(llBuf[0..], dctMedian);
+    return ImageHash{.hashType = "perceptual", .hash = intHash};
 }
 
 // implementation of the wavelet hash algorithm
-pub fn waveletHash(filename: []const u8) Error!u64 {
+pub fn waveletHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
     const size = 64;
@@ -419,14 +446,14 @@ pub fn waveletHash(filename: []const u8) Error!u64 {
 
     // allocate a buffer for the grayscaled image
     const grayBuf = try allocator.alloc(u8, image.imageSize());
-    rgb2Gray(image.Image, grayBuf, channels);
+    rgb2Gray(image.image, grayBuf, channels);
 
     // define an array and resize the grayscaled image
     var resizeBuf: [resize]u8 = undefined;
     const ok = c.stbir_resize_uint8_generic(
         grayBuf.ptr,
-        image.Width,
-        image.Height,
+        image.width,
+        image.height,
         0,
         resizeBuf[0..].ptr,
         @intCast(size),
@@ -480,86 +507,118 @@ pub fn waveletHash(filename: []const u8) Error!u64 {
     extractLL(tBuf[0..], llBuf[0..], llSize, size);
 
     const waveMedian = calcMedian(llBuf[0..], newSize);
-    return hashFromMedian(llBuf[0..], waveMedian);
+    const intHash = hashFromMedian(llBuf[0..], waveMedian);
+    return ImageHash{.hashType = "wavelet", .hash = intHash};
 }
 
 test "image hash equals" {
-    const tests = [_]struct { 
-        Path: []const u8,
-        Hash: u64,
-        Hasher: *const fn ([]const u8) Error!u64 
+    const tests = [_]struct {
+        path: []const u8,
+        hashType: []const u8,
+        hash: u64,
+        hexHash: []const u8,
+        hasher: *const fn ([]const u8) Error!ImageHash,
     }{
         // tests for the average hash algorithm
         .{
-            .Path = "./testdata/checkerboard.png",
-            .Hash = 2990062961267801748,
-            .Hasher = averageHash,
+            .path = "./testdata/checkerboard.png",
+            .hashType = "average",
+            .hash = 2990062961267801748,
+            .hexHash = "297ed66bd66b7e94",
+            .hasher = averageHash,
         },
         .{
-            .Path = "./testdata/gradient.png",
-            .Hash = 2197615328739459072,
-            .Hasher = averageHash,
+            .path = "./testdata/gradient.png",
+            .hashType = "average",
+            .hash = 2197615328739459072,
+            .hexHash = "1e7f7f7f7e780000",
+            .hasher = averageHash,
         },
         .{
-            .Path = "./testdata/noise.png",
-            .Hash = 6821913422469120,
-            .Hasher = averageHash,
+            .path = "./testdata/noise.png",
+            .hashType = "average",
+            .hash = 6821913422469120,
+            .hexHash = "183c7e7e3c1800",
+            .hasher = averageHash,
         },
 
         // tests for the difference hash algorithm
         .{
-            .Path = "./testdata/checkerboard.png",
-            .Hash = 15826956251609881124,
-            .Hasher = differenceHash,
+            .path = "./testdata/checkerboard.png",
+            .hashType = "difference",
+            .hash = 15826956251609881124,
+            .hexHash = "dba4a4db24dada24",
+            .hasher = differenceHash,
         },
         .{
-            .Path = "./testdata/gradient.png",
-            .Hash = 18228586548031439040,
-            .Hasher = differenceHash,
+            .path = "./testdata/gradient.png",
+            .hashType = "difference",
+            .hash = 18228586548031439040,
+            .hexHash = "fcf8f2e2e0e0c0c0",
+            .hasher = differenceHash,
         },
         .{
-            .Path = "./testdata/noise.png",
-            .Hash = 12858323363238572534,
-            .Hasher = differenceHash,
+            .path = "./testdata/noise.png",
+            .hashType = "difference",
+            .hash = 12858323363238572534,
+            .hexHash = "b271f0f8f8f0f1f6",
+            .hasher = differenceHash,
         },
 
         // tests for the wavelet hash algorithm
         .{
-            .Path = "./testdata/checkerboard.png",
-            .Hash = 18446673704965373696,
-            .Hasher = waveletHash,
+            .path = "./testdata/checkerboard.png",
+            .hashType = "wavelet",
+            .hash = 18446673704965373696,
+            .hexHash = "ffffbfffffffff00",
+            .hasher = waveletHash,
         },
         .{
-            .Path = "./testdata/gradient.png",
-            .Hash = 18374401693019275264,
-            .Hasher = waveletHash,
+            .path = "./testdata/gradient.png",
+            .hashType = "wavelet",
+            .hash = 18374401693019275264,
+            .hexHash = "fefefcfcf0c00000",
+            .hasher = waveletHash,
         },
         .{
-            .Path = "./testdata/noise.png",
-            .Hash = 15670382578127328000,
-            .Hasher = waveletHash,
+            .path = "./testdata/noise.png",
+            .hashType = "wavelet",
+            .hash = 15670382578127328000,
+            .hexHash = "d97861edf7bfd300",
+            .hasher = waveletHash,
         },
 
         // tests for the perceptual hash algorithm
         .{
-            .Path = "./testdata/checkerboard.png",
-            .Hash = 7770000005721920801,
-            .Hasher = perceptualHash,
+            .path = "./testdata/checkerboard.png",
+            .hashType = "perceptual",
+            .hash = 7770000005721920801,
+            .hexHash = "6bd495d685d69521",
+            .hasher = perceptualHash,
         },
         .{
-            .Path = "./testdata/gradient.png",
-            .Hash = 11769193724227288235,
-            .Hasher = perceptualHash,
+            .path = "./testdata/gradient.png",
+            .hashType = "perceptual",
+            .hash = 11769193724227288235,
+            .hexHash = "a35493561952fcab",
+            .hasher = perceptualHash,
         },
         .{
-            .Path = "./testdata/noise.png",
-            .Hash = 16427238378350324179,
-            .Hasher = perceptualHash,
+            .path = "./testdata/noise.png",
+            .hashType = "perceptual",
+            .hash = 16427238378350324179,
+            .hexHash = "e3f94645163c29d3",
+            .hasher = perceptualHash,
         },
     };
 
     for (tests) |hashTest| {
-        const hash = try hashTest.Hasher(hashTest.Path);
-        try std.testing.expectEqual(hashTest.Hash, hash);
+        const hash = try hashTest.hasher(hashTest.path);
+        try std.testing.expectEqual(hashTest.hashType, hash.hashType);
+        try std.testing.expectEqual(hashTest.hash, hash.hash);
+
+        var hexBuf: [16]u8 = undefined;
+        const hexDigest = try hash.hexDigest(hexBuf[0..]);
+        try std.testing.expectEqualSlices(u8, hashTest.hexHash[0..], hexDigest);
     }
 }
