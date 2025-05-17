@@ -107,7 +107,6 @@ pub const ImageHash = struct {
     }
 };
 
-
 // a simple struct to store the image and metadata after
 // loading an image
 const ImageLoad = struct {

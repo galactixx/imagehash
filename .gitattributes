@@ -1,0 +1,2 @@
+include/*.h linguist-vendored=true
+c_src/*.c linguist-vendored=true
