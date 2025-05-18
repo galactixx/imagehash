@@ -13,6 +13,26 @@ pub const Error = error{
 // pull in the JSON parse-error set
 pub const ParseError = std.json.ParseError(std.json.Scanner);
 
+// generates the 1D DCT basis for the 1D row/column transforms
+fn generateDCTBasis(basis: []f32, size: usize) void {
+    for (0..size) |u| {
+        for (0..size) |x| {
+            const uf: f32 = @floatFromInt(u);
+            const xf: f32 = @floatFromInt(x);
+            const sf: f32 = @floatFromInt(size);
+            const preCos: f32 = ((2 * xf + 1) * uf * std.math.pi) / (2 * sf);
+            var alpha: f32 = undefined;
+            if (u == 0) {
+                alpha = 1.0 / std.math.sqrt(sf);
+            } else {
+                alpha = std.math.sqrt(2.0 / sf);
+            }
+            const factor: f32 = alpha * std.math.cos(preCos);
+            basis[u * size + x] = factor;
+        }
+    }
+}
+
 // run a wavelet transform given a specific transform
 // object, either a RowTransform or ColumnTransform
 fn wavelet(comptime T: type, transform: *T, size: usize) void {
@@ -97,22 +117,37 @@ pub fn fromJSON(json: []const u8, alloc: std.mem.Allocator) ParseError!ImageHash
     return parsed.value;
 }
 
-// 
+// ImageHash represents a fixed-size hash of an image.
+// - `hashType` is a string identifier for the hash algorithm used.
+// - `hash` holds the computed hash value.
+// - `bits` indicates the bit-length of the hash (default 64).
 pub const ImageHash = struct {
     hashType: []const u8,
     hash: u64,
     bits: u8 = 64,
 
+    // toJSON serializes this ImageHash to a JSON string using the
+    // given allocator.
+    // returns the JSON bytes on success or an error if
+    // serialization fails.
     pub fn toJSON(self: ImageHash, alloc: *std.mem.Allocator) ![]u8 {    
         return try std.json.stringifyAlloc(alloc, self, .{});
     }
 
+    // distance computes the Hamming distance between this hash and
+    // another.
+    // it XORs the two 64-bit hashes and counts the number of
+    // differing bits.
     pub fn distance(self: ImageHash, hash: ImageHash) u64 {
         const diff = self.hash ^ hash.hash;
         const hammingDistance = @popCount(diff);
         return hammingDistance;
     }
 
+    // hexDigest writes the hexadecimal representation of the hash
+    // into `buf`.
+    // returns a slice of `buf` containing the hex digits or an
+    // error on failure.
     pub fn hexDigest(self: ImageHash, buf: []u8) ![]u8 {
         return try int64ToHex(buf, self.hash);
     }
@@ -393,22 +428,7 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
 
     // precomputing the 1D basis matrix
     var basis: [resize]f32 = undefined;
-    for (0..size) |u| {
-        for (0..size) |x| {
-            const uf: f32 = @floatFromInt(u);
-            const xf: f32 = @floatFromInt(x);
-            const sf: f32 = @floatFromInt(size);
-            const preCos: f32 = ((2 * xf + 1) * uf * std.math.pi) / (2 * sf);
-            var alpha: f32 = undefined;
-            if (u == 0) {
-                alpha = 1.0 / std.math.sqrt(sf);
-            } else {
-                alpha = std.math.sqrt(2.0 / sf);
-            }
-            const factor: f32 = alpha * std.math.cos(preCos);
-            basis[u * size + x] = factor;
-        }
-    }
+    generateDCTBasis(basis[0..], size);
 
     // applying a row-wise DCT pass
     for (0..size) |x| {
