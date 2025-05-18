@@ -257,7 +257,10 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     return ImageLoad{ .image = slice, .width = outX, .height = outY };
 }
 
-/// 
+/// given filename corresponding to an image, will load
+/// the image into a 1D slice, convert it to grayscale
+/// using the luminosity formula, and then resize the
+/// image according to the width and height arguments
 fn preprocessImage(
     filename: []const u8,
     resized: []u8,
