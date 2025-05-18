@@ -8,12 +8,10 @@ pub fn build(b: *std.Build) void {
     // ─────────────────────────────────────────────────────────────
     const host = b.standardTargetOptions(.{});
 
-    const target: std.Build.ResolvedTarget = if (
-        host.result.os.tag == .windows and host.result.abi == .msvc
-    ) b.resolveTargetQuery(.{
+    const target: std.Build.ResolvedTarget = if (host.result.os.tag == .windows and host.result.abi == .msvc) b.resolveTargetQuery(.{
         .cpu_arch = host.result.cpu.arch,
-        .os_tag   = .windows,
-        .abi      = .gnu,
+        .os_tag = .windows,
+        .abi = .gnu,
     }) else host;
 
     const optimize = b.standardOptimizeOption(.{});
@@ -31,13 +29,13 @@ pub fn build(b: *std.Build) void {
     // 3. STB implementation object (C)
     // ─────────────────────────────────────────────────────────────
     const stb = b.addObject(.{
-        .name   = "stb_impl",
+        .name = "stb_impl",
         .target = target,
         .optimize = optimize,
-        .link_libc  = true,
+        .link_libc = true,
     });
     stb.addCSourceFiles(.{
-        .files = &.{ "c_src/stb_impl.c" },
+        .files = &.{"c_src/stb_impl.c"},
         .flags = &.{},
     });
     stb.addIncludePath(b.path("include/"));
@@ -46,8 +44,8 @@ pub fn build(b: *std.Build) void {
     // 4. Static library that exposes the Zig API
     // ─────────────────────────────────────────────────────────────
     const lib = b.addLibrary(.{
-        .name        = "imagehash",
-        .linkage     = .static,
+        .name = "imagehash",
+        .linkage = .static,
         .root_module = lib_mod,
     });
     lib.addIncludePath(b.path("include/"));
@@ -58,7 +56,7 @@ pub fn build(b: *std.Build) void {
     // 5. Unit tests
     // ─────────────────────────────────────────────────────────────
     const img_tests = b.addTest(.{
-        .root_source_file  = b.path("src/imagehash.zig"),
+        .root_source_file = b.path("src/imagehash.zig"),
     });
     img_tests.addIncludePath(b.path("include/"));
     img_tests.addObject(stb);

@@ -130,7 +130,7 @@ pub const ImageHash = struct {
     /// given allocator.
     /// returns the JSON bytes on success or an error if
     /// serialization fails.
-    pub fn toJSON(self: ImageHash, alloc: *std.mem.Allocator) ![]u8 {    
+    pub fn toJSON(self: ImageHash, alloc: *std.mem.Allocator) ![]u8 {
         return try std.json.stringifyAlloc(alloc, self, .{});
     }
 
@@ -240,13 +240,7 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     @memcpy(c_filename[0..filename.len], filename);
     c_filename[filename.len] = 0;
 
-    const data = c.stbi_load(
-        c_filename.ptr,
-        &outX,
-        &outY,
-        &outChannels,
-        channels
-    );
+    const data = c.stbi_load(c_filename.ptr, &outX, &outY, &outChannels, channels);
 
     if (data == null) {
         return Error.LoadFailed;
@@ -261,13 +255,7 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
 /// the image into a 1D slice, convert it to grayscale
 /// using the luminosity formula, and then resize the
 /// image according to the width and height arguments
-fn preprocessImage(
-    filename: []const u8,
-    resized: []u8,
-    channels: u8,
-    rWidth: u8,
-    rHeight: u8
-) Error!void {
+fn preprocessImage(filename: []const u8, resized: []u8, channels: u8, rWidth: u8, rHeight: u8) Error!void {
     const allocator = std.heap.page_allocator;
     var image = try loadImage(filename, channels);
 
@@ -279,8 +267,8 @@ fn preprocessImage(
     const ok = c.stbir_resize_uint8_generic(
         grayBuf.ptr,
         image.width,
-        image.height, 0,
-        resized[0..].ptr,
+        image.height,
+        0, resized[0..].ptr,
         @intCast(rWidth),
         @intCast(rHeight),
         0,
@@ -336,7 +324,7 @@ pub fn averageHash(filename: []const u8) Error!ImageHash {
             hash |= @as(u64, 1) << typedI;
         }
     }
-    return ImageHash{.hashType = "aHash", .hash = hash};
+    return ImageHash{ .hashType = "aHash", .hash = hash };
 }
 
 /// implementation of the difference hash algorithm.
@@ -388,7 +376,7 @@ pub fn differenceHash(filename: []const u8) Error!ImageHash {
             }
         }
     }
-    return ImageHash{.hashType = "dHash", .hash = hash};
+    return ImageHash{ .hashType = "dHash", .hash = hash };
 }
 
 /// implementation of the perceptual hash algorithm.
@@ -455,7 +443,7 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
 
     const dctMedian = calcMedian(llBuf[0..], newSize);
     const intHash = hashFromMedian(llBuf[0..], dctMedian);
-    return ImageHash{.hashType = "pHash", .hash = intHash};
+    return ImageHash{ .hashType = "pHash", .hash = intHash };
 }
 
 /// implementation of the wavelet hash algorithm.
@@ -491,12 +479,8 @@ pub fn waveletHash(filename: []const u8) Error!ImageHash {
     var distBuf: [whSize]f32 = undefined;
     var tempBuf: []f32 = distBuf[0..lvlSize];
 
-    var rowTransform = RowTransform{
-        .size = whSize, .t = tBuf[0..], .temp = tempBuf
-    };
-    var colTransform = ColumnTransform{
-        .size = whSize, .t = tBuf[0..], .temp = tempBuf
-    };
+    var rowTransform = RowTransform{ .size = whSize, .t = tBuf[0..], .temp = tempBuf };
+    var colTransform = ColumnTransform{ .size = whSize, .t = tBuf[0..], .temp = tempBuf };
     for (1..4) |_| {
         // row wavelet transform
         wavelet(RowTransform, &rowTransform, lvlSize);
@@ -523,7 +507,7 @@ pub fn waveletHash(filename: []const u8) Error!ImageHash {
 
     const waveMedian = calcMedian(llBuf[0..], newSize);
     const intHash = hashFromMedian(llBuf[0..], waveMedian);
-    return ImageHash{.hashType = "wHash", .hash = intHash};
+    return ImageHash{ .hashType = "wHash", .hash = intHash };
 }
 
 test "hamming distance" {
@@ -538,11 +522,7 @@ test "parse image hash from JSON" {
     const allocator = std.heap.page_allocator;
     const jsonText = "{\"hashType\": \"aHash\", \"hash\": 2990062961267801748, \"bits\": 64}";
     const imageHash = try fromJSON(jsonText, allocator);
-    const imageHashExp = ImageHash{
-        .hashType = "aHash",
-        .hash = 2990062961267801748,
-        .bits = 64
-    };
+    const imageHashExp = ImageHash{ .hashType = "aHash", .hash = 2990062961267801748, .bits = 64 };
     try std.testing.expectEqualDeep(imageHashExp, imageHash);
 }
 
