@@ -13,7 +13,7 @@ pub const Error = error{
 // pull in the JSON parse-error set
 pub const ParseError = std.json.ParseError(std.json.Scanner);
 
-// generates the 1D DCT basis for the 1D row/column transforms
+/// generates the 1D DCT basis for the 1D row/column transforms
 fn generateDCTBasis(basis: []f32, size: usize) void {
     for (0..size) |u| {
         for (0..size) |x| {
@@ -33,8 +33,8 @@ fn generateDCTBasis(basis: []f32, size: usize) void {
     }
 }
 
-// run a wavelet transform given a specific transform
-// object, either a RowTransform or ColumnTransform
+/// run a wavelet transform given a specific transform
+/// object, either a RowTransform or ColumnTransform
 fn wavelet(comptime T: type, transform: *T, size: usize) void {
     for (0..size) |idx| {
         var pairIdx: usize = 0;
@@ -45,9 +45,9 @@ fn wavelet(comptime T: type, transform: *T, size: usize) void {
     }
 }
 
-// run a decomposition on a given pair of values
-// both an average and a difference is computed and then
-// written to the temporary buffer
+/// run a decomposition on a given pair of values
+/// both an average and a difference is computed and then
+/// written to the temporary buffer
 fn d(comptime T: type, t: *T, cur: usize, next: usize, y: usize) void {
     const invSqrt = 1.0 / std.math.sqrt(2.0);
     const avg = (t.t[cur] + t.t[next]) * invSqrt;
@@ -56,9 +56,9 @@ fn d(comptime T: type, t: *T, cur: usize, next: usize, y: usize) void {
     t.temp[t.temp.len / 2 + y / 2] = diff;
 }
 
-// contains logic housed within two methods (write, decomp)
-// for the row transform which does the decomposition and
-// also writes to the row buffer
+/// contains logic housed within two methods (write, decomp)
+/// for the row transform which does the decomposition and
+/// also writes to the row buffer
 const RowTransform = struct {
     size: usize,
     t: []f32,
@@ -76,9 +76,9 @@ const RowTransform = struct {
     }
 };
 
-// contains logic housed within two methods (write, decomp)
-// for the column transform which does the decomposition and
-// also writes to the row buffer
+/// contains logic housed within two methods (write, decomp)
+/// for the column transform which does the decomposition and
+/// also writes to the row buffer
 const ColumnTransform = struct {
     size: usize,
     t: []f32,
@@ -96,65 +96,65 @@ const ColumnTransform = struct {
     }
 };
 
-// simple function to convert an integer hash to
-// its hexidecimal representation
+/// simple function to convert an integer hash to
+/// its hexidecimal representation
 fn int64ToHex(hex: []u8, hash: u64) ![]u8 {
     return try std.fmt.bufPrint(hex, "{x}", .{hash});
 }
 
-// calculates an image size from two c_int variables and
-// converts the result to a usize
+/// calculates an image size from two c_int variables and
+/// converts the result to a usize
 fn imageSizeFromC(width: c_int, height: c_int) usize {
     const imgWidth: usize = @intCast(width);
     const imgHeight: usize = @intCast(height);
     return imgWidth * imgHeight;
 }
 
-// parse a singluar JSON object into an ImageHash instance
+/// parse a singluar JSON object into an ImageHash instance
 pub fn fromJSON(json: []const u8, alloc: std.mem.Allocator) ParseError!ImageHash {
     const parsed = try std.json.parseFromSlice(ImageHash, alloc, json, .{});
     defer parsed.deinit();
     return parsed.value;
 }
 
-// ImageHash represents a fixed-size hash of an image.
-// - `hashType` is a string identifier for the hash algorithm used.
-// - `hash` holds the computed hash value.
-// - `bits` indicates the bit-length of the hash (default 64).
+/// ImageHash represents a fixed-size hash of an image.
+/// - `hashType` is a string identifier for the hash algorithm used.
+/// - `hash` holds the computed hash value.
+/// - `bits` indicates the bit-length of the hash (default 64).
 pub const ImageHash = struct {
     hashType: []const u8,
     hash: u64,
     bits: u8 = 64,
 
-    // toJSON serializes this ImageHash to a JSON string using the
-    // given allocator.
-    // returns the JSON bytes on success or an error if
-    // serialization fails.
+    /// toJSON serializes this ImageHash to a JSON string using the
+    /// given allocator.
+    /// returns the JSON bytes on success or an error if
+    /// serialization fails.
     pub fn toJSON(self: ImageHash, alloc: *std.mem.Allocator) ![]u8 {    
         return try std.json.stringifyAlloc(alloc, self, .{});
     }
 
-    // distance computes the Hamming distance between this hash and
-    // another.
-    // it XORs the two 64-bit hashes and counts the number of
-    // differing bits.
+    /// distance computes the Hamming distance between this hash and
+    /// another.
+    /// it XORs the two 64-bit hashes and counts the number of
+    /// differing bits.
     pub fn distance(self: ImageHash, hash: ImageHash) u64 {
         const diff = self.hash ^ hash.hash;
         const hammingDistance = @popCount(diff);
         return hammingDistance;
     }
 
-    // hexDigest writes the hexadecimal representation of the hash
-    // into `buf`.
-    // returns a slice of `buf` containing the hex digits or an
-    // error on failure.
+    /// hexDigest writes the hexadecimal representation of the hash
+    /// into `buf`.
+    /// returns a slice of `buf` containing the hex digits or an
+    /// error on failure.
     pub fn hexDigest(self: ImageHash, buf: []u8) ![]u8 {
         return try int64ToHex(buf, self.hash);
     }
 };
 
-// a simple struct to store the image and metadata after
-// loading an image
+/// a simple struct to store the image and metadata after
+/// loading an image
 const ImageLoad = struct {
     image: []u8,
     width: c_int,
@@ -169,9 +169,9 @@ const ImageLoad = struct {
     }
 };
 
-// converts an image with RGB channels into a grayscale image
-// calculated using the luminosity formula
-// L = (R * 299 + G * 587 + B * 114) / 1000
+/// converts an image with RGB channels into a grayscale image
+/// calculated using the luminosity formula
+/// L = (R * 299 + G * 587 + B * 114) / 1000
 fn rgb2Gray(imageBuf: []u8, grayBuf: []u8, channels: usize) void {
     var iter: usize = 0;
     while (iter < imageBuf.len) : (iter += channels) {
@@ -183,8 +183,8 @@ fn rgb2Gray(imageBuf: []u8, grayBuf: []u8, channels: usize) void {
     }
 }
 
-// calculates the median for an array of numbers
-// uses a naive approach rather than a quick select algorithm
+/// calculates the median for an array of numbers
+/// uses a naive approach rather than a quick select algorithm
 fn calcMedian(nums: []f32, comptime size: usize) f32 {
     var sorted: [size]f32 = undefined;
     @memcpy(sorted[0..size], nums[0..size]);
@@ -198,8 +198,8 @@ fn calcMedian(nums: []f32, comptime size: usize) f32 {
     }
 }
 
-// calculates a hash by applying median thresholding to
-// each pixel in the array
+/// calculates a hash by applying median thresholding to
+/// each pixel in the array
 fn hashFromMedian(buf: []f32, median: f32) u64 {
     var hash: u64 = 0;
     for (0..buf.len) |i| {
@@ -211,7 +211,7 @@ fn hashFromMedian(buf: []f32, median: f32) u64 {
     return hash;
 }
 
-// extracts the top S x S block from the input array
+/// extracts the top S x S block from the input array
 fn extractLL(in: []f32, out: []f32, llSize: usize, size: usize) void {
     var medianIdx: usize = 0;
     for (0..llSize) |x| {
@@ -222,9 +222,9 @@ fn extractLL(in: []f32, out: []f32, llSize: usize, size: usize) void {
     }
 }
 
-// given a filename will load an image into an 1D slice
-// and return an ImageLoad object with the slice and
-// accompanying metadata
+/// given a filename will load an image into an 1D slice
+/// and return an ImageLoad object with the slice and
+/// accompanying metadata
 fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     const allocator = std.heap.page_allocator;
 
@@ -257,13 +257,13 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     return ImageLoad{ .image = slice, .width = outX, .height = outY };
 }
 
-// implementation of the average hash algorithm.
-// given a filename, an image is loaded in, converted
-// to gray scale using the luminosity formula, and
-// resized to 8 x 8.
-// then an average of all the values in the resulting 8 x 8
-// is calculated, and thresholding is applied to each value,
-// where the threshold is this calculated average
+/// implementation of the average hash algorithm.
+/// given a filename, an image is loaded in, converted
+/// to gray scale using the luminosity formula, and
+/// resized to 8 x 8.
+/// then an average of all the values in the resulting 8 x 8
+/// is calculated, and thresholding is applied to each value,
+/// where the threshold is this calculated average
 pub fn averageHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
@@ -321,18 +321,18 @@ pub fn averageHash(filename: []const u8) Error!ImageHash {
     return ImageHash{.hashType = "aHash", .hash = hash};
 }
 
-// implementation of the difference hash algorithm.
-// given a filename, an image is loaded in, converted
-// to gray scale using the luminosity formula, and
-// resized to 9 x 8.
-// from this resized image, a horizontal different hash
-// is calculated.
-// this means that for every one of the eight rows, each
-// element in that row, except for the last, is compared
-// against the element to the right.
-// thresholding is then applied to every value in an
-// 8 x 8 area of the 9 x 8 image where the threshold is
-// the next value in the row
+/// implementation of the difference hash algorithm.
+/// given a filename, an image is loaded in, converted
+/// to gray scale using the luminosity formula, and
+/// resized to 9 x 8.
+/// from this resized image, a horizontal different hash
+/// is calculated.
+/// this means that for every one of the eight rows, each
+/// element in that row, except for the last, is compared
+/// against the element to the right.
+/// thresholding is then applied to every value in an
+/// 8 x 8 area of the 9 x 8 image where the threshold is
+/// the next value in the row
 pub fn differenceHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
@@ -397,15 +397,15 @@ pub fn differenceHash(filename: []const u8) Error!ImageHash {
     return ImageHash{.hashType = "dHash", .hash = hash};
 }
 
-// implementation of the perceptual hash algorithm.
-// given a filename, an image is loaded in, converted
-// to gray scale using the luminosity formula, and
-// resized to 32 x 32.
-// a separable DCT-II is applied, first along
-// the rows and then the columns of the 32 x 32 resized image.
-// then the top left 8 x 8 square is extracted and
-// thresholding is applied where the threshold is the median
-// of the values
+/// implementation of the perceptual hash algorithm.
+/// given a filename, an image is loaded in, converted
+/// to gray scale using the luminosity formula, and
+/// resized to 32 x 32.
+/// a separable DCT-II is applied, first along
+/// the rows and then the columns of the 32 x 32 resized image.
+/// then the top left 8 x 8 square is extracted and
+/// thresholding is applied where the threshold is the median
+/// of the values
 pub fn perceptualHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
@@ -489,16 +489,16 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
     return ImageHash{.hashType = "pHash", .hash = intHash};
 }
 
-// implementation of the wavelet hash algorithm.
-// given a filename, an image is loaded in, converted
-// to gray scale using the luminosity formula, and
-// resized to 64 x 64.
-// a three level 1D wavelet transformation is then applied.
-// for each level, the transformation is first applied on
-// the rows and then the columns.
-// after the three-level transformation, the top left 8 x 8 square
-// is extracted and thresholding is applied where the threshold
-// is the median of the values
+/// implementation of the wavelet hash algorithm.
+/// given a filename, an image is loaded in, converted
+/// to gray scale using the luminosity formula, and
+/// resized to 64 x 64.
+/// a three level 1D wavelet transformation is then applied.
+/// for each level, the transformation is first applied on
+/// the rows and then the columns.
+/// after the three-level transformation, the top left 8 x 8 square
+/// is extracted and thresholding is applied where the threshold
+/// is the median of the values
 pub fn waveletHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
