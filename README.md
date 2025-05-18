@@ -118,4 +118,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## 📞 **Contact**
 
-Have questions or need help? Open an issue on the [GitHub repository](https://github.com/galactixx/imagehash) or reach out via Twitter @yourhandle.
+Have questions or need help? Open an issue on the [GitHub repository](https://github.com/galactixx/imagehash).
