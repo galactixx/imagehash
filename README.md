@@ -66,31 +66,31 @@ pub fn main() !void {
 
 ## 🔍 **API**
 
-### `pub fn averageHash(filename: []const u8) Error!ImageHash`
+#### `pub fn averageHash(filename: []const u8) Error!ImageHash`
 
 Computes an 8×8 average-based hash (`ahash`).
 
-### `pub fn differenceHash(filename: []const u8) Error!ImageHash`
+#### `pub fn differenceHash(filename: []const u8) Error!ImageHash`
 
 Computes a 9×8 horizontal difference-based hash (`dhash`).
-
-### `pub fn perceptualHash(filename: []const u8) Error!ImageHash`
+s
+#### `pub fn perceptualHash(filename: []const u8) Error!ImageHash`
 
 Computes a 32×32 perceptual (DCT-based) hash and reduces to an 8×8 block (`phash`).
 
-### `pub fn waveletHash(filename: []const u8) Error!ImageHash`
+#### `pub fn waveletHash(filename: []const u8) Error!ImageHash`
 
 Computes a 64×64 wavelet-based hash with 4-level decomposition (`whash`).
 
-### `pub fn (self: ImageHash) distance(other: ImageHash) u64`
+#### `pub fn (self: ImageHash) distance(other: ImageHash) u64`
 
 Returns the Hamming distance between two hashes.
 
-### `pub fn (self: ImageHash) toJSON(alloc: *std.mem.Allocator) ![]u8`
+#### `pub fn (self: ImageHash) toJSON(alloc: *std.mem.Allocator) ![]u8`
 
 Serialize an `ImageHash` to a JSON byte slice.
 
-### `pub fn fromJSON(json: []const u8, alloc: std.mem.Allocator) ParseError!ImageHash`
+#### `pub fn fromJSON(json: []const u8, alloc: std.mem.Allocator) ParseError!ImageHash`
 
 Parse an `ImageHash` from JSON.
 
