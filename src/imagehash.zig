@@ -257,7 +257,13 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     return ImageLoad{ .image = slice, .width = outX, .height = outY };
 }
 
-// implementation of the average hash algorithm
+// implementation of the average hash algorithm.
+// given a filename, an image is loaded in, converted
+// to gray scale using the luminosity formula, and
+// resized to 8 x 8.
+// then an average of all the values in the resulting 8 x 8
+// is calculated, and thresholding is applied to each value,
+// where the threshold is this calculated average
 pub fn averageHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
@@ -315,7 +321,18 @@ pub fn averageHash(filename: []const u8) Error!ImageHash {
     return ImageHash{.hashType = "aHash", .hash = hash};
 }
 
-// implementation of the difference hash algorithm
+// implementation of the difference hash algorithm.
+// given a filename, an image is loaded in, converted
+// to gray scale using the luminosity formula, and
+// resized to 9 x 8.
+// from this resized image, a horizontal different hash
+// is calculated.
+// this means that for every one of the eight rows, each
+// element in that row, except for the last, is compared
+// against the element to the right.
+// thresholding is then applied to every value in an
+// 8 x 8 area of the 9 x 8 image where the threshold is
+// the next value in the row
 pub fn differenceHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
@@ -380,7 +397,15 @@ pub fn differenceHash(filename: []const u8) Error!ImageHash {
     return ImageHash{.hashType = "dHash", .hash = hash};
 }
 
-// implementation of the perceptual hash algorithm
+// implementation of the perceptual hash algorithm.
+// given a filename, an image is loaded in, converted
+// to gray scale using the luminosity formula, and
+// resized to 32 x 32.
+// a separable DCT-II is applied, first along
+// the rows and then the columns of the 32 x 32 resized image.
+// then the top left 8 x 8 square is extracted and
+// thresholding is applied where the threshold is the median
+// of the values
 pub fn perceptualHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
@@ -430,7 +455,7 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
     var basis: [resize]f32 = undefined;
     generateDCTBasis(basis[0..], size);
 
-    // applying a row-wise DCT pass
+    // applying a row-wise 1D DCT pass
     for (0..size) |x| {
         for (0..size) |u| {
             var colSum: f32 = 0;
@@ -441,7 +466,7 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
         }
     }
 
-    // applying a column-wise DCT pass
+    // applying a column-wise 1D DCT pass
     for (0..size) |u| {
         for (0..size) |v| {
             var rowSum: f32 = 0;
@@ -464,7 +489,16 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
     return ImageHash{.hashType = "pHash", .hash = intHash};
 }
 
-// implementation of the wavelet hash algorithm
+// implementation of the wavelet hash algorithm.
+// given a filename, an image is loaded in, converted
+// to gray scale using the luminosity formula, and
+// resized to 64 x 64.
+// a three level 1D wavelet transformation is then applied.
+// for each level, the transformation is first applied on
+// the rows and then the columns.
+// after the three-level transformation, the top left 8 x 8 square
+// is extracted and thresholding is applied where the threshold
+// is the median of the values
 pub fn waveletHash(filename: []const u8) Error!ImageHash {
     const allocator = std.heap.page_allocator;
 
