@@ -1,7 +1,0 @@
-name:        galactixx/imagehash
-version:     0.1.0
-description: Image hashing algorithms (aHash, dHash, pHash, wHash) for Zig.
-license:     MIT
-zig_version: "0.14.0"
-dependencies:
-  std:       "0.14.0"

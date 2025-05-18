@@ -19,35 +19,24 @@ ImageHash is a Zig package for generating robust image fingerprints using four p
 
 ## 🚀 Getting Started
 
-### 1. Install via ZPM (recommended)
+### 1. Fetch via `zig fetch`
+
+You can use the built‑in Zig fetcher to download and pin a tarball:
 
 ```bash
-zpm add galactixx/imagehash
+zig fetch --save=imagehash \
+  https://github.com/galactixx/imagehash/archive/v0.1.0.tar.gz
 ```
 
-Then in your `build.zig`:
+> This adds an `imagehash` entry under `.dependencies` in your `build.zig.zon`. 
+
+Then in your build.zig:
 
 ```zig
-const std = @import("std");
-
-pub fn build(b: *std.build.Builder) void {
-    const target   = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-    const lib = b.addStaticLibrary(.{
-        .name             = "mylib",
-        .root_source_file = .{ .path = "src/lib.zig" },
-        .target           = target,
-        .optimize         = optimize,
-    });
-
-    const pkg = b.dependency("galactixx/imagehash", .{});
-    const ih  = pkg.module("imagehash");
-
-    lib.addPackagePath("imagehash", ih.src_path);
-}
+const pkg = b.dependency("imagehash", .{});
+const ih  = pkg.module("imagehash");
+lib.addPackagePath("imagehash", ih.src_path);
 ```
-
-> Internally, ZPM will fetch `galactixx/imagehash` and make it available under `ih.src_path`
 
 ---
 
@@ -63,24 +52,7 @@ In your `build.zig`:
 lib.addPackagePath("imagehash", "../imagehash/src");
 ```
 
-### 3. Fetch via `zig fetch`
-
-You can also use the built‑in Zig fetcher to download and pin a tarball:
-
-```bash
-zig fetch --save=imagehash \
-  https://github.com/galactixx/imagehash/archive/v0.1.0.tar.gz
-```
-
-This adds an `imagehash` entry under `.dependencies` in your `build.zig.zon`. Then consume it just like ZPM:
-
-```zig
-const pkg = b.dependency("imagehash", .{});
-const ih  = pkg.module("imagehash");
-lib.addPackagePath("imagehash", ih.src_path);
-```
-
-All approaches let you `const ih = @import("imagehash");` in your Zig code. Pick whichever workflow suits you.
+Both approaches let you `const ih = @import("imagehash");` in your Zig code. Pick whichever workflow suits you.
 
 ## 📚 **Usage**
 
