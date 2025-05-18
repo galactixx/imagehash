@@ -257,21 +257,15 @@ fn loadImage(filename: []const u8, channels: u8) Error!ImageLoad {
     return ImageLoad{ .image = slice, .width = outX, .height = outY };
 }
 
-/// implementation of the average hash algorithm.
-/// given a filename, an image is loaded in, converted
-/// to gray scale using the luminosity formula, and
-/// resized to 8 x 8.
-/// then an average of all the values in the resulting 8 x 8
-/// is calculated, and thresholding is applied to each value,
-/// where the threshold is this calculated average
-pub fn averageHash(filename: []const u8) Error!ImageHash {
+/// 
+fn preprocessImage(
+    filename: []const u8,
+    resized: []u8,
+    channels: u8,
+    rWidth: u8,
+    rHeight: u8
+) Error!void {
     const allocator = std.heap.page_allocator;
-
-    const resizeWidth = 8;
-    const resizeHeight = 8;
-    const resize = resizeHeight * resizeWidth;
-    const channels = 3;
-
     var image = try loadImage(filename, channels);
 
     // allocate a buffer for the grayscaled image
@@ -279,14 +273,13 @@ pub fn averageHash(filename: []const u8) Error!ImageHash {
     rgb2Gray(image.image, grayBuf, channels);
 
     // define an array and resize the grayscaled image
-    var resizeBuf: [resize]u8 = undefined;
     const ok = c.stbir_resize_uint8_generic(
         grayBuf.ptr,
         image.width,
         image.height, 0,
-        resizeBuf[0..].ptr,
-        @intCast(resizeWidth),
-        @intCast(resizeHeight),
+        resized[0..].ptr,
+        @intCast(rWidth),
+        @intCast(rHeight),
         0,
         1,
         -1,
@@ -301,20 +294,42 @@ pub fn averageHash(filename: []const u8) Error!ImageHash {
     }
     defer image.freeMemory();
     defer allocator.free(grayBuf);
+}
+
+/// implementation of the average hash algorithm.
+/// given a filename, an image is loaded in, converted
+/// to gray scale using the luminosity formula, and
+/// resized to 8 x 8.
+/// then an average of all the values in the resulting 8 x 8
+/// is calculated, and thresholding is applied to each value,
+/// where the threshold is this calculated average
+pub fn averageHash(filename: []const u8) Error!ImageHash {
+    const resizeWidth = 8;
+    const resizeHeight = 8;
+    const resize = resizeHeight * resizeWidth;
+    var resizedImage: [resize]u8 = undefined;
+
+    try preprocessImage(
+        filename,
+        resizedImage[0..],
+        3,
+        resizeWidth,
+        resizeHeight,
+    );
 
     var pixelSum: usize = 0;
-    for (0..resizeBuf.len) |i| {
-        pixelSum += resizeBuf[i];
+    for (0..resizedImage.len) |i| {
+        pixelSum += resizedImage[i];
     }
 
-    const pixelAvg: u64 = pixelSum / resizeBuf.len;
+    const pixelAvg: u64 = pixelSum / resizedImage.len;
 
     // apply threholding to each pixel value after resizing
     // and accumulate a hash based on the results
     var hash: u64 = 0;
-    for (0..resizeBuf.len) |i| {
+    for (0..resizedImage.len) |i| {
         const typedI: u6 = @intCast(i);
-        if (resizeBuf[i] >= pixelAvg) {
+        if (resizedImage[i] >= pixelAvg) {
             hash |= @as(u64, 1) << typedI;
         }
     }
@@ -334,42 +349,18 @@ pub fn averageHash(filename: []const u8) Error!ImageHash {
 /// 8 x 8 area of the 9 x 8 image where the threshold is
 /// the next value in the row
 pub fn differenceHash(filename: []const u8) Error!ImageHash {
-    const allocator = std.heap.page_allocator;
-
     const resizeWidth = 9;
     const resizeHeight = 8;
     const resize = resizeHeight * resizeWidth;
-    const channels = 3;
+    var resizedImage: [resize]u8 = undefined;
 
-    var image = try loadImage(filename, channels);
-
-    // allocate a buffer for the grayscaled image
-    const grayBuf = try allocator.alloc(u8, image.imageSize());
-    rgb2Gray(image.image, grayBuf, channels);
-
-    // define an array and resize the grayscaled image
-    var resizeBuf: [resize]u8 = undefined;
-    const ok = c.stbir_resize_uint8_generic(
-        grayBuf.ptr, image.width,
-        image.height,
-        0,
-        resizeBuf[0..].ptr,
-        @intCast(resizeWidth),
-        @intCast(resizeHeight),
-        0,
-        1,
-        -1,
-        0,
-        c.STBIR_EDGE_CLAMP,
-        c.STBIR_FILTER_TRIANGLE,
-        c.STBIR_COLORSPACE_LINEAR,
-        null
+    try preprocessImage(
+        filename,
+        resizedImage[0..],
+        3,
+        resizeWidth,
+        resizeHeight,
     );
-    if (ok == 0) {
-        return Error.ResizeFailed;
-    }
-    defer image.freeMemory();
-    defer allocator.free(grayBuf);
 
     // apply threholding to each pixel value after resizing
     // and accumulate a hash based on the results
@@ -383,8 +374,8 @@ pub fn differenceHash(filename: []const u8) Error!ImageHash {
             // because iteration is only through the height,
             // no element from the 9th column will ever be a
             // current value
-            const curVal: isize = resizeBuf[curIdx];
-            const nextVal: isize = resizeBuf[curIdx + 1];
+            const curVal: isize = resizedImage[curIdx];
+            const nextVal: isize = resizedImage[curIdx + 1];
 
             // the left shit if calculated and applied only
             // if the current value is larger than the next
@@ -407,73 +398,48 @@ pub fn differenceHash(filename: []const u8) Error!ImageHash {
 /// thresholding is applied where the threshold is the median
 /// of the values
 pub fn perceptualHash(filename: []const u8) Error!ImageHash {
-    const allocator = std.heap.page_allocator;
+    const whSize = 32;
+    const resize = whSize * whSize;
+    var resizedImage: [resize]u8 = undefined;
 
-    const size = 32;
-    const channels = 3;
-    const resize = size * size;
-
-    var image = try loadImage(filename, channels);
-
-    // allocate a buffer for the grayscaled image
-    const grayBuf = try allocator.alloc(u8, image.imageSize());
-    rgb2Gray(image.image, grayBuf, channels);
-
-    // define an array and resize the grayscaled image
-    var resizeBuf: [resize]u8 = undefined;
-    const ok = c.stbir_resize_uint8_generic(
-        grayBuf.ptr,
-        image.width, 
-        image.height,
-        0,
-        resizeBuf[0..].ptr,
-        @intCast(size),
-        @intCast(size),
-        0,
-        1,
-        -1,
-        0,
-        c.STBIR_EDGE_CLAMP,
-        c.STBIR_FILTER_TRIANGLE,
-        c.STBIR_COLORSPACE_LINEAR,
-        null
+    try preprocessImage(
+        filename,
+        resizedImage[0..],
+        3,
+        whSize,
+        whSize,
     );
-    if (ok == 0) {
-        return Error.ResizeFailed;
-    }
-    defer image.freeMemory();
-    defer allocator.free(grayBuf);
 
     // define two arrays for intermediate and final states
     var temp: [resize]f32 = undefined;
     var dct: [resize]f32 = undefined;
-    for (0..resizeBuf.len) |i| {
-        dct[i] = @floatFromInt(resizeBuf[i]);
+    for (0..resizedImage.len) |i| {
+        dct[i] = @floatFromInt(resizedImage[i]);
     }
 
     // precomputing the 1D basis matrix
     var basis: [resize]f32 = undefined;
-    generateDCTBasis(basis[0..], size);
+    generateDCTBasis(basis[0..], whSize);
 
     // applying a row-wise 1D DCT pass
-    for (0..size) |x| {
-        for (0..size) |u| {
+    for (0..whSize) |x| {
+        for (0..whSize) |u| {
             var colSum: f32 = 0;
-            for (0..size) |y| {
-                colSum += dct[x * size + y] * basis[u * size + y];
+            for (0..whSize) |y| {
+                colSum += dct[x * whSize + y] * basis[u * whSize + y];
             }
-            temp[x * size + u] = colSum;
+            temp[x * whSize + u] = colSum;
         }
     }
 
     // applying a column-wise 1D DCT pass
-    for (0..size) |u| {
-        for (0..size) |v| {
+    for (0..whSize) |u| {
+        for (0..whSize) |v| {
             var rowSum: f32 = 0;
-            for (0..size) |x| {
-                rowSum += temp[x * size + u] * basis[v * size + x];
+            for (0..whSize) |x| {
+                rowSum += temp[x * whSize + u] * basis[v * whSize + x];
             }
-            dct[v * size + u] = rowSum;
+            dct[v * whSize + u] = rowSum;
         }
     }
 
@@ -482,7 +448,7 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
     const llSize: usize = 8;
     const newSize: usize = llSize * llSize;
     var llBuf: [newSize]f32 = undefined;
-    extractLL(dct[0..], llBuf[0..], llSize, size);
+    extractLL(dct[0..], llBuf[0..], llSize, whSize);
 
     const dctMedian = calcMedian(llBuf[0..], newSize);
     const intHash = hashFromMedian(llBuf[0..], dctMedian);
@@ -500,58 +466,33 @@ pub fn perceptualHash(filename: []const u8) Error!ImageHash {
 /// is extracted and thresholding is applied where the threshold
 /// is the median of the values
 pub fn waveletHash(filename: []const u8) Error!ImageHash {
-    const allocator = std.heap.page_allocator;
+    const whSize = 64;
+    const resize = whSize * whSize;
+    var resizedImage: [resize]u8 = undefined;
 
-    const size = 64;
-    const channels = 3;
-    const resize = size * size;
-
-    var image = try loadImage(filename, channels);
-
-    // allocate a buffer for the grayscaled image
-    const grayBuf = try allocator.alloc(u8, image.imageSize());
-    rgb2Gray(image.image, grayBuf, channels);
-
-    // define an array and resize the grayscaled image
-    var resizeBuf: [resize]u8 = undefined;
-    const ok = c.stbir_resize_uint8_generic(
-        grayBuf.ptr,
-        image.width,
-        image.height,
-        0,
-        resizeBuf[0..].ptr,
-        @intCast(size),
-        @intCast(size),
-        0,
-        1,
-        -1,
-        0,
-        c.STBIR_EDGE_CLAMP,
-        c.STBIR_FILTER_TRIANGLE,
-        c.STBIR_COLORSPACE_LINEAR,
-        null
+    try preprocessImage(
+        filename,
+        resizedImage[0..],
+        3,
+        whSize,
+        whSize,
     );
-    if (ok == 0) {
-        return Error.ResizeFailed;
-    }
-    defer image.freeMemory();
-    defer allocator.free(grayBuf);
 
     // define an array for the transformations
     var tBuf: [resize]f32 = undefined;
-    for (0..resizeBuf.len) |i| {
-        tBuf[i] = @floatFromInt(resizeBuf[i]);
+    for (0..resizedImage.len) |i| {
+        tBuf[i] = @floatFromInt(resizedImage[i]);
     }
 
-    var lvlSize: usize = size;
-    var distBuf: [size]f32 = undefined;
+    var lvlSize: usize = whSize;
+    var distBuf: [whSize]f32 = undefined;
     var tempBuf: []f32 = distBuf[0..lvlSize];
 
     var rowTransform = RowTransform{
-        .size = size, .t = tBuf[0..], .temp = tempBuf
+        .size = whSize, .t = tBuf[0..], .temp = tempBuf
     };
     var colTransform = ColumnTransform{
-        .size = size, .t = tBuf[0..], .temp = tempBuf
+        .size = whSize, .t = tBuf[0..], .temp = tempBuf
     };
     for (1..4) |_| {
         // row wavelet transform
@@ -575,7 +516,7 @@ pub fn waveletHash(filename: []const u8) Error!ImageHash {
     const llSize: usize = 8;
     const newSize: usize = llSize * llSize;
     var llBuf: [newSize]f32 = undefined;
-    extractLL(tBuf[0..], llBuf[0..], llSize, size);
+    extractLL(tBuf[0..], llBuf[0..], llSize, whSize);
 
     const waveMedian = calcMedian(llBuf[0..], newSize);
     const intHash = hashFromMedian(llBuf[0..], waveMedian);
