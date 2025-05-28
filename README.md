@@ -19,13 +19,12 @@ ImageHash is a Zig package for generating robust image fingerprints using four p
 
 ## 🚀 Getting Started
 
-### 1. Fetch via `zig fetch`
+### Fetch via `zig fetch`
 
 You can use the built‑in Zig fetcher to download and pin a tarball:
 
 ```bash
-zig fetch --save=imagehash \
-  https://github.com/galactixx/imagehash/archive/v0.1.0.tar.gz
+zig fetch --save git+https://github.com/galactixx/imagehash#v0.2.0
 ```
 
 > This adds an `imagehash` entry under `.dependencies` in your `build.zig.zon`. 
@@ -33,41 +32,34 @@ zig fetch --save=imagehash \
 Then in your build.zig:
 
 ```zig
-const pkg = b.dependency("imagehash", .{});
-const ih  = pkg.module("imagehash");
-lib.addPackagePath("imagehash", ih.src_path);
+const imagehash_mod = b.dependency("imagehash", .{
+    .target = target,
+    .optimize = optimize,
+}).module("imagehash");
+
+// add to library
+lib.addImport("imagehash", imagehash_mod);
+
+// add to executable
+exe.root_module.addImport("imagehash", imagehash_mod);
 ```
 
----
-
-### 2. Manual
-
-```bash
-git clone https://github.com/galactixx/imagehash.git
-```
-
-In your `build.zig`:
-
-```zig
-lib.addPackagePath("imagehash", "../imagehash/src");
-```
-
-Both approaches let you `const ih = @import("imagehash");` in your Zig code. Pick whichever workflow suits you.
+This lets you `const ih = @import("imagehash");` in your Zig code.
 
 ## 📚 **Usage**
 
 ```zig
 const std = @import("std");
-const imagehash = @import("imagehash");
+const ih = @import("imagehash");
 
 pub fn main() !void {
     const file = "testdata/checkerboard.png";
 
     // Compute all four hashes
-    const ahash = try imagehash.averageHash(file);
-    const dhash = try imagehash.differenceHash(file);
-    const phash = try imagehash.perceptualHash(file);
-    const whash = try imagehash.waveletHash(file);
+    const ahash = try ih.averageHash(file);
+    const dhash = try ih.differenceHash(file);
+    const phash = try ih.perceptualHash(file);
+    const whash = try ih.waveletHash(file);
 
     // Print hex digests
     var buf: [16]u8 = undefined;
