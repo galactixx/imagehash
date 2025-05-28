@@ -38,7 +38,7 @@ const imagehash_mod = b.dependency("imagehash", .{
 }).module("imagehash");
 
 // add to library
-lib.addImport("imagehash", imagehash_mod);
+lib_mod.addImport("imagehash", imagehash_mod);
 
 // add to executable
 exe.root_module.addImport("imagehash", imagehash_mod);
