@@ -2,7 +2,7 @@
   <img src="/docs/logo.png" alt="imagehash logo" width="75%"/>
 </p>
 
-ImageHash is a Zig package for generating robust image fingerprints using four popular algorithms: **average (ahash)**, **difference (dhash)**, **perceptual (phash)**, and **wavelet (whash)** hashing. Perfect for image deduplication, similarity detection, and quick image comparisons.
+ImageHash is a Zig package for generating robust image fingerprints using four popular algorithms: **average (ahash)**, **difference (dhash)**, **perceptual (phash)**, and **wavelet (whash)** hashing.
 
 ## ✨ **Features**
 
@@ -12,11 +12,7 @@ ImageHash is a Zig package for generating robust image fingerprints using four p
   * **dhash** (Difference Hash)
   * **phash** (Perceptual Hash)
   * **whash** (Wavelet Hash)
-* **Flexible Image Loading:** Supports common formats via `stb_image` and resizing via `stb_image_resize`.
-* **Grayscale Conversion:** Uses luminosity formula for accurate luminance-based hashing.
-* **JSON Interoperability:** Serialize hashes to/from JSON (`toJSON`, `fromJSON`).
-* **Hamming Distance:** Compute bitwise Hamming distance between two hashes.
-
+  * 
 ## 🚀 Getting Started
 
 ### Fetch via `zig fetch`
