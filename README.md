@@ -12,7 +12,7 @@ ImageHash is a Zig package for generating robust image fingerprints using four p
   * **dhash** (Difference Hash)
   * **phash** (Perceptual Hash)
   * **whash** (Wavelet Hash)
-  * 
+
 ## 🚀 Getting Started
 
 ### Fetch via `zig fetch`
